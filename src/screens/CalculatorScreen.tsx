@@ -5,7 +5,7 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+  Modal,
   KeyboardAvoidingView,
   Platform,
   TouchableWithoutFeedback,
@@ -16,13 +16,15 @@ export default function CalculatorScreen() {
   const [num1, setNum1] = useState('');
   const [num2, setNum2] = useState('');
   const [result, setResult] = useState<number | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   const handleCalc = (operation: string) => {
     const a = parseFloat(num1);
     const b = parseFloat(num2);
 
     if (isNaN(a) || isNaN(b)) {
-      Alert.alert('Erro', 'Digite dois números válidos.');
+      setResult(null);
+      setModalVisible(true);
       return;
     }
 
@@ -33,7 +35,8 @@ export default function CalculatorScreen() {
       case '*': res = a * b; break;
       case '/':
         if (b === 0) {
-          Alert.alert('Erro', 'Não é possível dividir por zero.');
+          setResult(null);
+          setModalVisible(true);
           return;
         }
         res = a / b;
@@ -42,6 +45,7 @@ export default function CalculatorScreen() {
     }
 
     setResult(res);
+    setModalVisible(true);
   };
 
   return (
@@ -84,9 +88,27 @@ export default function CalculatorScreen() {
             </TouchableOpacity>
           </View>
 
-          {result !== null && (
-            <Text style={styles.result}>Resultado: {result}</Text>
-          )}
+          {/* Modal */}
+          <Modal visible={modalVisible} animationType="slide" transparent={true}>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContainer}>
+                <Text style={styles.modalTitle}>
+                  {result === null ? 'Erro' : 'Resultado'}
+                </Text>
+                <Text style={styles.modalText}>
+                  {result === null
+                    ? 'Entrada inválida ou divisão por zero.'
+                    : `O resultado é: ${result}`}
+                </Text>
+                <TouchableOpacity
+                  style={styles.modalButton}
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.modalButtonText}>Fechar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         </View>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
@@ -94,9 +116,7 @@ export default function CalculatorScreen() {
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
-    flex: 1,
-  },
+  wrapper: { flex: 1 },
   container: {
     flex: 1,
     padding: 20,
@@ -104,11 +124,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
   },
-  title: {
-    fontSize: 28,
-    marginBottom: 30,
-    fontWeight: 'bold',
-  },
+  title: { fontSize: 28, marginBottom: 30, fontWeight: 'bold' },
   input: {
     borderWidth: 1,
     borderColor: '#ccc',
@@ -124,6 +140,7 @@ const styles = StyleSheet.create({
     gap: 10,
     flexWrap: 'wrap',
   },
+  
   button: {
     backgroundColor: '#55a38b',
     padding: 15,
@@ -132,14 +149,30 @@ const styles = StyleSheet.create({
     minWidth: 60,
     alignItems: 'center',
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+
+  buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+
+
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  result: {
-    fontSize: 20,
-    marginTop: 30,
-    fontWeight: 'bold',
+  modalContainer: {
+    backgroundColor: '#fff',
+    padding: 25,
+    borderRadius: 15,
+    alignItems: 'center',
+    width: '80%',
   },
+  modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 10 },
+  modalText: { fontSize: 18, marginBottom: 20, textAlign: 'center' },
+  modalButton: {
+    backgroundColor: '#55a38b',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  modalButtonText: { color: '#fff', fontWeight: 'bold' },
 });
