@@ -62,5 +62,5 @@ npx expo start
 - Funcionalidades pendentes: Jogo da Velha, Lista de Tarefas com SQLite, Navegador interno
 - Toda a estrutura está em TypeScript, com navegação já implementada usando React Navigation
 - O código segue padrão modular, com separação clara por responsabilidade
-- Projeto universitário desenvolvido por Lucas (GitHub: [lucca7r](https://github.com/lucca7r))
+- Projeto universitário desenvolvido por Lucas (GitHub: [lucca7r](https://github.com/lucca7r)) e Luan (GitHub: [Luan_Medrado8](https://github.com/LuanMedrado8))
 
