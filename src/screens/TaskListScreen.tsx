@@ -1,23 +1,66 @@
-import React, { useState } from 'react';
-import { Keyboard, TouchableWithoutFeedback } from 'react-native';
-import {
-  View, Text, StyleSheet, FlatList, Modal, TextInput,
-  Button, TouchableOpacity
+import React, { useState, useEffect } from 'react';
+import { KeyboardAvoidingView, Platform } from 'react-native';
+import { 
+  View, Text, StyleSheet, FlatList, Modal, TextInput, 
+  Button, TouchableOpacity, Keyboard, TouchableWithoutFeedback 
 } from 'react-native';
-import { Overlay } from 'react-native-maps';
 import { TextInputMask } from 'react-native-masked-text';
-import { Picker } from '@react-native-picker/picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import styles from '../style/TaskListScreen';
 
+interface Task {
+  name: string;
+  startDate: string;
+  priority: string;
+  status: string;
+}
 
-export default function TaskListScreen() {
-  const [tasks, setTasks] = useState([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [taskName, setTaskName] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [priority, setPriority] = useState('');
-  const [status, setStatus] = useState('');
-  const [editingIndex, setEditingIndex] = useState(null);
-  const [errorVisible, setErrorVisible] = useState(false);
+export default function TaskListScreen(): JSX.Element {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [modalVisible, setModalVisible] = useState<boolean>(false);
+  const [taskName, setTaskName] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [priority, setPriority] = useState<string>('');
+  const [status, setStatus] = useState<string>('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [errorVisible, setErrorVisible] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+
+  // Função para salvar as tarefas no AsyncStorage
+  const saveTasksToStorage = async (tasks: Task[]) => {
+    try {
+      const jsonValue = JSON.stringify(tasks);
+      await AsyncStorage.setItem('@tasks', jsonValue);
+    } catch (e) {
+      console.error('Erro ao salvar tarefas:', e);
+    }
+  };
+
+  // Função para carregar as tarefas do AsyncStorage
+  const loadTasksFromStorage = async () => {
+    try {
+      const jsonValue = await AsyncStorage.getItem('@tasks');
+      return jsonValue != null ? JSON.parse(jsonValue) : [];
+    } catch (e) {
+      console.error('Erro ao carregar tarefas:', e);
+      return [];
+    }
+  };
+
+  // Carregar as tarefas ao iniciar a tela
+  useEffect(() => {
+    const fetchTasks = async () => {
+      const savedTasks = await loadTasksFromStorage();
+      setTasks(savedTasks);
+    };
+
+    fetchTasks();
+  }, []);
+
+  // Salvar as tarefas sempre que elas forem modificadas
+  useEffect(() => {
+    saveTasksToStorage(tasks);
+  }, [tasks]);
 
   const openModal = () => {
     setTaskName('');
@@ -29,18 +72,28 @@ export default function TaskListScreen() {
   };
 
   const saveTask = () => {
-    const newTask = { name: taskName, startDate, priority, status };
-    if (editingIndex !== null) {
-      const updated = [...tasks];
-      updated[editingIndex] = newTask;
-      setTasks(updated);
-    } else {
-      setTasks([...tasks, newTask]);
+    if (!taskName || !startDate || !priority || !status) {
+      setModalVisible(false);
+      setErrorVisible(true);
+      setErrorMessage('Preencha todos os campos!');
+      return;
     }
+
+    const newTask: Task = { name: taskName, startDate, priority, status };
+
+    let updatedTasks;
+    if (editingIndex !== null) {
+      updatedTasks = [...tasks];
+      updatedTasks[editingIndex] = newTask;
+    } else {
+      updatedTasks = [...tasks, newTask];
+    }
+
+    setTasks(updatedTasks);
     setModalVisible(false);
   };
 
-  const editTask = (index) => {
+  const editTask = (index: number) => {
     const task = tasks[index];
     setTaskName(task.name);
     setStartDate(task.startDate);
@@ -50,58 +103,92 @@ export default function TaskListScreen() {
     setModalVisible(true);
   };
 
-  const deleteTask = (index) => {
+  const deleteTask = (index: number) => {
     const filtered = tasks.filter((_, i) => i !== index);
     setTasks(filtered);
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string): string => {
     switch (status) {
-      case 'em andamento':
-        return '#fff3cd'; // amarelo claro
-      case 'finalizada':
-        return '#d4edda'; // verde claro
+      case 'Em andamento':
+        return '#fff3cd';
+      case 'Finalizada':
+        return '#d4edda';
       default:
-        return '#ffffff'; // fundo padrão
+        return '#ffffff';
     }
   };
 
-  const handleDateChange = (text) => {
+  const handleDateChange = (text: string) => {
     setStartDate(text);
   
-    // Verifica se a data está completa (10 caracteres)
-    if (text.length === 10) {
-      const [day, month, year] = text.split('/').map(Number);
+    // Só valida se tiver o tamanho mínimo de uma data completa
+    if (text.length < 10) {
+      setErrorVisible(true);
+      setErrorMessage('Data inválida!');
+      return;
+    }
   
-      const date = new Date(year, month - 1, day);
+    const [day, month, yearStr] = text.split('/');
+    const year = Number(yearStr);
+    const monthNum = Number(month);
+    const dayNum = Number(day);
   
-      // Verifica se a data é válida e bate com o texto digitado
-      const isValid =
-        date &&
-        date.getFullYear() === year &&
-        date.getMonth() === month - 1 &&
-        date.getDate() === day;
+    // Verificações básicas
+    if (
+      yearStr.length !== 4 ||
+      isNaN(year) || isNaN(monthNum) || isNaN(dayNum) ||
+      monthNum < 1 || monthNum > 12 ||
+      dayNum < 1 || dayNum > 31
+    ) {
+      setErrorMessage('Data inválida!');
+      setErrorVisible(true);
+      return;
+    }
   
-      if (!isValid) {
+    const date = new Date(year, monthNum - 1, dayNum);
+    
+    // Verifica se a data gerada bate com os dados fornecidos
+    const isValid =
+      date.getFullYear() === year &&
+      date.getMonth() === monthNum - 1 &&
+      date.getDate() === dayNum;
+  
+    // Se não for válida, exibe mensagem
+    if (!isValid) {
+      setErrorMessage('Data inválida! Por favor, insira uma data real.');
+      setErrorVisible(true);
+    } else {
+      // Verifica se a data é no passado
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Ignora as horas para comparação
+  
+      if (date < today) {
+        setErrorMessage('Data não pode ser no passado! Por favor, insira uma data futura.');
         setErrorVisible(true);
-        setStartDate('');
+      } else {
+        setErrorVisible(false);
       }
     }
   };
 
   const closeErrorModal = () => {
-    setErrorVisible(false); // Fecha o modal de erro
+    setErrorVisible(false);
   };
 
-  const renderItem = ({ item, index }) => (
+  const renderItem = ({ item, index }: { item: Task; index: number }) => (
     <View style={[styles.taskItem, { backgroundColor: getStatusColor(item.status) }]}>
       <Text style={styles.taskText}>Nome: {item.name}</Text>
       <Text style={styles.taskText}>Início: {item.startDate}</Text>
       <Text style={styles.taskText}>Prioridade: {item.priority}</Text>
       <Text style={styles.taskText}>Status: {item.status}</Text>
       <View style={styles.taskButtons}>
-        <Button title="Editar" onPress={() => editTask(index)} />
-        <Button title="Excluir" color="red" onPress={() => deleteTask(index)} />
+        <TouchableOpacity style={styles.button} onPress={() => editTask(index)}>
+          <Button title="Editar" color='white' onPress={() => editTask(index)} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.button} onPress={() => deleteTask(index)}>
+          <Button title="Excluir" color='white' onPress={() => deleteTask(index)} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -118,149 +205,93 @@ export default function TaskListScreen() {
       />
 
       <TouchableOpacity style={styles.addButton} onPress={openModal}>
-        <Text style={styles.addButtonText}>+ Adicionar</Text>
+        <Text style={styles.addButtonText} onPress={openModal}>+ Adicionar</Text>
       </TouchableOpacity>
 
-  
-  <Modal visible={modalVisible} animationType="fade" transparent={true}>
-  <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-  <View style={styles.modalOverlay}>
-  <View style={styles.modalContainer}>
-    <Text style={styles.modalTitle}>
-      {editingIndex !== null ? 'Editar Tarefa' : 'Nova Tarefa'}
-    </Text>
+      <Modal visible={modalVisible} animationType="fade" transparent>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalOverlay}
+          >
+            <View style={styles.modalContainer}>
+              <Text style={styles.modalTitle}>
+                {editingIndex !== null ? 'Editar Tarefa' : 'Nova Tarefa'}
+              </Text>
 
-    <Text style={styles.label}>Nome da Tarefa</Text>
-    <TextInput
-      style={styles.input}
-      value={taskName}
-      onChangeText={setTaskName}
-      placeholder="Nome da tarefa"
-      placeholderTextColor="#888"
-    />
+              <Text style={styles.label}>Nome da Tarefa</Text>
+              <TextInput
+                style={styles.input}
+                value={taskName}
+                onChangeText={setTaskName}
+                placeholder="Nome da tarefa"
+                placeholderTextColor="#888"
+              />
 
-<Text style={styles.label}>Data de Início</Text>
-<TextInputMask
-  type={'datetime'}
-  options={{ format: 'DD/MM/YYYY' }}
-  style={styles.input}
-  value={startDate}
-  placeholder="DD/MM/AAAA"
-  placeholderTextColor="#888"
-  onChangeText={handleDateChange}
-/>
+              <Text style={styles.label}>Data de Início</Text>
+              <TextInputMask
+                type={'datetime'}
+                options={{ format: 'DD/MM/YYYY' }}
+                style={styles.input}
+                value={startDate}
+                placeholder="DD/MM/AAAA"
+                placeholderTextColor="#888"
+                onChangeText={handleDateChange}
+              />
 
-    <Text style={styles.label}>Prioridade</Text>
-    <TextInput
-      style={styles.input}
-      placeholder="baixa, média ou alta"
-      placeholderTextColor="#888"
-      value={priority}
-      onChangeText={setPriority}
-    />
+              <Text style={styles.label}>Prioridade</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="baixa, média ou alta"
+                placeholderTextColor="#888"
+                value={priority}
+                onChangeText={setPriority}
+              />
 
-    <Text style={styles.label}>Status</Text>
-    <TextInput
-      style={styles.input}
-      placeholder="esperando, em andamento, finalizada"
-      placeholderTextColor="#888"
-      value={status}
-      onChangeText={setStatus}
-    />
+              <Text style={styles.label}>Status</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="esperando, em andamento, finalizada"
+                placeholderTextColor="#888"
+                value={status}
+                onChangeText={setStatus}
+              />
 
-    <View style={styles.modalButtons}>
-      <Button title="Salvar" onPress={saveTask} />
-      <Button title="Cancelar" color="red" onPress={() => setModalVisible(false)} />
-    </View>
-  </View>
-  </View>
-  </TouchableWithoutFeedback>
-  <Modal visible={errorVisible} transparent={true} animationType="fade">
+              <View style={styles.modalButtons}>
+                <TouchableOpacity style={styles.button} onPress={saveTask}>
+                  <Button title="Salvar" color="white" onPress={saveTask} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.button} onPress={() => setModalVisible(false)}>
+                  <Button title="Sair" color="white" onPress={() => setModalVisible(false)} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      <Modal visible={errorVisible} transparent animationType="fade">
         <View style={styles.errorOverlay}>
           <View style={styles.errorModalContainer}>
             <Text style={styles.errorTitle}>Erro</Text>
-            <Text style={styles.errorText}>Data inválida. Por favor, insira uma data real.</Text>
-            <Button title="Fechar" onPress={closeErrorModal} />
+            <Text style={styles.errorText}>{errorMessage}</Text>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => {
+                closeErrorModal();
+                setModalVisible(true);
+              }}
+            >
+              <Text style={styles.text} onPress={() => {
+                closeErrorModal();
+                setModalVisible(true);
+              }}>Ok</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
-
-</Modal>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1, padding: 20, backgroundColor: '#f2f2f2',
-  },
-  modalOverlay: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)'
-  },
-  header: {
-    fontSize: 24, fontWeight: 'bold', marginBottom: 10, textAlign: 'center'
-  },
-  taskItem: {
-    padding: 15, borderRadius: 8, marginBottom: 10, elevation: 1
-  },
-  taskText: {
-    fontSize: 16
-  },
-  taskButtons: {
-    flexDirection: 'row', justifyContent: 'space-between', marginTop: 10
-  },
-  addButton: {
-    backgroundColor: '#007bff', padding: 15, borderRadius: 50,
-    position: 'absolute', bottom: 30, right: 30,
-  },
-  addButtonText: {
-    color: '#fff', fontSize: 18, fontWeight: 'bold'
-  },
-  modalContainer: {
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 12,
-    width: '90%',          // ou algo como 300 se quiser fixo
-    maxWidth: 400,         // limita em telas maiores
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  modalTitle: {
-    fontSize: 22, fontWeight: 'bold', marginBottom: 20, textAlign: 'center'
-  },
-  input: {
-    borderWidth: 1, borderColor: '#ccc', padding: 10, marginBottom: 10,
-    borderRadius: 8, backgroundColor: '#fff'
-  },
-  modalButtons: {
-    flexDirection: 'row', justifyContent: 'space-around', marginTop: 20
-  }
-,label: {
-  fontSize: 16,
-  fontWeight: '600',
-  marginTop: 10,
-  marginBottom: 5,
-},  errorOverlay: {
-  flex: 1, justifyContent: 'center', alignItems: 'center',
-  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-},
-errorModalContainer: {
-  backgroundColor: '#fff',
-  padding: 20,
-  borderRadius: 12,
-  width: '80%',
-  maxWidth: 350,
-  elevation: 10,
-},
-errorTitle: {
-  fontSize: 20, fontWeight: 'bold', color: 'black', marginBottom: 10, textAlign: 'center',
-},
-errorText: {
-  fontSize: 16, color: '#333', textAlign: 'center', marginBottom: 20,
-},
 
-});
